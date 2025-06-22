@@ -5,16 +5,19 @@
 #include <limits>
 #include <functional> // For std::less
 
+namespace {
+
 // RAII wrapper for curl_global_init and curl_global_cleanup.
-// This ensures that libcurl is initialized before first use and cleaned up at exit.
+// Its constructor and destructor are called at program startup and shutdown.
 class CurlGlobalInitializer {
 public:
     CurlGlobalInitializer() {
-        // CURL_GLOBAL_DEFAULT is fine for most cases.
-        // For SSL and thread safety, CURL_GLOBAL_SSL is a good choice.
-        CURLcode res = curl_global_init(CURL_GLOBAL_DEFAULT);
-        if (res != CURLE_OK) {
-            throw std::runtime_error("Failed to initialize libcurl globally.");
+        // Use if-statement with initializer (C++17) to scope 'res'
+        if (CURLcode res = curl_global_init(CURL_GLOBAL_DEFAULT); res != CURLE_OK) {
+            // It's unsafe to throw from a global object's constructor before main(),
+            // as it can lead to std::terminate. A message to stderr is a safer failure mode.
+            std::cerr << "Fatal: Failed to initialize libcurl globally." << std::endl;
+            // Optionally, one could call std::abort() here.
         }
     }
 
@@ -29,8 +32,11 @@ public:
     CurlGlobalInitializer& operator=(CurlGlobalInitializer&&) = delete;
 };
 
-// A single static instance will be created, ensuring initialization happens once.
-static CurlGlobalInitializer global_curl_initializer;
+// A single const instance in an anonymous namespace ensures libcurl is
+// initialized once at program start and cleaned up at program exit.
+const CurlGlobalInitializer global_curl_initializer;
+
+} // namespace
 
 
 // Private implementation class (PImpl Idiom)
@@ -92,7 +98,7 @@ private:
     // Each request gets its own handle for thread safety.
     CURL* curl = curl_easy_init();
     if (!curl) {
-        throw HttpException("Failed to create CURL easy handle.");
+        throw CurlException("Failed to create CURL easy handle.");
     }
 
     // Using unique_ptr for RAII cleanup of CURL and curl_slist
@@ -159,16 +165,15 @@ private:
         const size_t body_length = postBody->length();
         // **SAFETY**: Prevent narrowing conversion from size_t to long if body is too large.
         if (body_length > static_cast<size_t>(std::numeric_limits<long>::max())) {
-            throw HttpException("POST body is too large to be handled by libcurl.");
+            throw CurlException("POST body is too large to be handled by libcurl.");
         }
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postBody->c_str());
         curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body_length));
     }
 
     // Perform the request
-    CURLcode res = curl_easy_perform(curl);
-    if (res != CURLE_OK) {
-        throw HttpException("curl_easy_perform() failed: " + std::string(curl_easy_strerror(res)));
+    if (CURLcode res = curl_easy_perform(curl); res != CURLE_OK) {
+        throw CurlException("curl_easy_perform() failed: " + std::string(curl_easy_strerror(res)));
     }
 
     // Get the response status code

@@ -23,7 +23,7 @@ void test_simple_get() {
         print_response("Simple GET", response);
         assert(response.statusCode == 200);
         assert(!response.body.empty());
-    } catch (const HttpException& e) {
+    } catch (const CurlException& e) {
         std::cerr << std::format("Test 'Simple GET' failed: {}\n", e.what());
     }
 }
@@ -39,7 +39,7 @@ void test_get_with_headers() {
         print_response("GET with Headers", response);
         assert(response.statusCode == 200);
         assert(response.body.find("Hello C++23") != std::string::npos);
-    } catch (const HttpException& e) {
+    } catch (const CurlException& e) {
         std::cerr << std::format("Test 'GET with Headers' failed: {}\n", e.what());
     }
 }
@@ -58,7 +58,7 @@ void test_simple_post() {
         assert(response.body.find("\"name\": \"test\"") != std::string::npos);
         assert(response.body.find("\"value\": 42") != std::string::npos);
         assert(response.body.find("application/json") != std::string::npos);
-    } catch (const HttpException& e) {
+    } catch (const CurlException& e) {
         std::cerr << std::format("Test 'Simple POST' failed: {}\n", e.what());
     }
 }
@@ -68,7 +68,7 @@ void test_connection_failure() {
         HttpClient client;
         (void)client.get("http://192.0.2.1/test"); 
         std::cerr << "Test 'Connection Failure' failed: Expected an exception, but none was thrown.\n";
-    } catch (const HttpException& e) {
+    } catch (const CurlException& e) {
         std::cout << std::format("--- Connection Failure ---\n");
         std::cout << std::format("Successfully caught expected exception: {}\n\n", e.what());
     }
@@ -81,7 +81,7 @@ void test_timeout() {
         HttpClient client(config);
         (void)client.get("https://httpbin.org/delay/3");
         std::cerr << "Test 'Timeout' failed: Expected a timeout exception, but none was thrown.\n";
-    } catch (const HttpException& e) {
+    } catch (const CurlException& e) {
         std::cout << std::format("--- Timeout ---\n");
         std::cout << std::format("Successfully caught expected timeout exception: {}\n\n", e.what());
     }
@@ -92,7 +92,7 @@ void test_invalid_certificate() {
         HttpClient client;
         (void)client.get("https://self-signed.badssl.com/");
         std::cerr << "Test 'Invalid Certificate' failed: Expected an exception, but none was thrown.\n";
-    } catch (const HttpException& e) {
+    } catch (const CurlException& e) {
         std::cout << std::format("--- Invalid Certificate ---\n");
         std::cout << std::format("Successfully caught expected certificate validation exception: {}\n\n", e.what());
     }
@@ -116,7 +116,7 @@ void test_thread_safety() {
                 } else {
                     std::cerr << std::format("Thread {} failed with status code {}.\n", i, response.statusCode);
                 }
-            } catch (const HttpException& e) {
+            } catch (const CurlException& e) {
                 std::cerr << std::format("Thread {} caught an exception: {}\n", i, e.what());
             }
         });

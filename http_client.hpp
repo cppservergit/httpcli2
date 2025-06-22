@@ -10,11 +10,11 @@
 #include <functional> // For std::less
 
 /**
- * @brief Custom exception for HTTP client-related errors.
+ * @brief Custom exception for libcurl-related errors.
  *
  * Thrown for network failures, timeouts, or other libcurl errors.
  */
-class HttpException : public std::runtime_error {
+class CurlException : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
 };
@@ -74,7 +74,7 @@ public:
      * @param url The URL to request.
      * @param headers A map of request headers with a transparent comparator.
      * @return The HTTP response.
-     * @throws HttpException on failure.
+     * @throws CurlException on failure.
      */
     [[nodiscard]] HttpResponse get(const std::string& url, const std::map<std::string, std::string, std::less<>>& headers = {}) const;
 
@@ -84,7 +84,7 @@ public:
      * @param body The request body.
      * @param headers A map of request headers with a transparent comparator. A "Content-Type" header is recommended.
      * @return The HTTP response.
-     * @throws HttpException on failure.
+     * @throws CurlException on failure.
      */
     [[nodiscard]] HttpResponse post(const std::string& url, const std::string& body, const std::map<std::string, std::string, std::less<>>& headers = {}) const;
 
