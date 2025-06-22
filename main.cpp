@@ -53,9 +53,8 @@ void test_simple_post() {
         print_response("Simple POST", response);
         assert(response.statusCode == 200);
         
-        // FIX: The httpbin/post response escapes quotes in the "data" field.
-        // It's more robust to check for the key-value pairs in the "json" field,
-        // where they are not escaped.
+        // The httpbin/post response escapes quotes in the "data" field.
+        // It's more robust to check for the key-value pairs in the "json" field.
         assert(response.body.find("\"name\": \"test\"") != std::string::npos);
         assert(response.body.find("\"value\": 42") != std::string::npos);
 
@@ -69,8 +68,7 @@ void test_connection_failure() {
     try {
         HttpClient client;
         // This address is reserved for documentation and should not be routable.
-        // We cast to (void) to explicitly ignore the [[nodiscard]] return value,
-        // as we expect an exception here.
+        // We cast to (void) to explicitly ignore the [[nodiscard]] return value.
         (void)client.get("http://192.0.2.1/test"); 
         std::cerr << "Test 'Connection Failure' failed: Expected an exception, but none was thrown.\n";
     } catch (const HttpException& e) {
@@ -86,14 +84,24 @@ void test_timeout() {
         config.requestTimeoutMs = 1000L; // 1 second
         HttpClient client(config);
 
-        // httpbin.org/delay/:seconds will wait for the specified number of seconds.
-        // We cast to (void) to explicitly ignore the [[nodiscard]] return value,
-        // as we expect an exception here.
+        // We cast to (void) to explicitly ignore the [[nodiscard]] return value.
         (void)client.get("https://httpbin.org/delay/3");
         std::cerr << "Test 'Timeout' failed: Expected a timeout exception, but none was thrown.\n";
     } catch (const HttpException& e) {
         std::cout << "--- Timeout ---\n";
         std::cout << "Successfully caught expected timeout exception: " << e.what() << "\n\n";
+    }
+}
+
+void test_invalid_certificate() {
+    try {
+        HttpClient client;
+        // self-signed.badssl.com uses a self-signed certificate which should be rejected.
+        (void)client.get("https://self-signed.badssl.com/");
+        std::cerr << "Test 'Invalid Certificate' failed: Expected an exception, but none was thrown.\n";
+    } catch (const HttpException& e) {
+        std::cout << "--- Invalid Certificate ---\n";
+        std::cout << "Successfully caught expected certificate validation exception: " << e.what() << "\n\n";
     }
 }
 
@@ -134,6 +142,7 @@ int main() {
     test_simple_post();
     test_connection_failure();
     test_timeout();
+    test_invalid_certificate();
     test_thread_safety();
 
     std::cout << "All tests finished.\n";
