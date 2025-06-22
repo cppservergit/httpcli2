@@ -2,6 +2,8 @@
 #include <curl/curl.h>
 #include <iostream>
 #include <utility>
+#include <limits>
+#include <functional> // For std::less
 
 // RAII wrapper for curl_global_init and curl_global_cleanup.
 // This ensures that libcurl is initialized before first use and cleaned up at exit.
@@ -38,7 +40,7 @@ public:
 
     [[nodiscard]] HttpResponse performRequest(const std::string& url,
                                               const std::optional<std::string>& postBody,
-                                              const std::map<std::string, std::string>& headers) const;
+                                              const std::map<std::string, std::string, std::less<>>& headers) const;
 private:
     HttpClientConfig m_config;
 
@@ -49,20 +51,25 @@ private:
             return 0;
         }
         auto* responseBody = static_cast<std::string*>(userdata);
-        responseBody->append(ptr, size * nmemb);
-        return size * nmemb;
+        const size_t total_size = size * nmemb;
+        try {
+            responseBody->append(ptr, total_size);
+        } catch (const std::bad_alloc&) {
+            // Handle memory allocation failure if the response is huge
+            return 0; 
+        }
+        return total_size;
     }
 
     static size_t headerCallback(char* buffer, size_t size, size_t nitems, void* userdata) {
         if (userdata == nullptr) {
             return 0;
         }
-        auto* responseHeaders = static_cast<std::map<std::string, std::string>*>(userdata);
+        auto* responseHeaders = static_cast<std::map<std::string, std::string, std::less<>>*>(userdata);
         std::string header(buffer, size * nitems);
-        size_t colon_pos = header.find(':');
         
-        // We only care about key-value headers, not status lines or others.
-        if (colon_pos != std::string::npos) {
+        // Use if-statement with initializer (C++17) to scope colon_pos
+        if (const size_t colon_pos = header.find(':'); colon_pos != std::string::npos) {
             std::string key = header.substr(0, colon_pos);
             std::string value = header.substr(colon_pos + 1);
 
@@ -81,7 +88,7 @@ private:
 
 [[nodiscard]] HttpResponse HttpClient::Impl::performRequest(const std::string& url,
                                                             const std::optional<std::string>& postBody,
-                                                            const std::map<std::string, std::string>& headers) const {
+                                                            const std::map<std::string, std::string, std::less<>>& headers) const {
     // Each request gets its own handle for thread safety.
     CURL* curl = curl_easy_init();
     if (!curl) {
@@ -97,6 +104,10 @@ private:
 
     HttpResponse response;
     
+    // --- Constants for settings ---
+    static constexpr const char* USER_AGENT = "cpp-http-client/1.0";
+    static constexpr long FOLLOW_REDIRECTS = 1L;
+
     // --- Configure CURL options ---
 
     // Set URL
@@ -107,15 +118,13 @@ private:
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, m_config.requestTimeoutMs);
     
     // **SECURITY**: Enforce a minimum of TLS 1.2
-    // This prevents libcurl from negotiating older, insecure protocols.
-    // This is a common requirement from security scanners like SonarCloud.
     curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
 
     // Follow redirects
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, FOLLOW_REDIRECTS);
     
     // Provide a user agent
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "cpp-http-client/1.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
 
     // Set callbacks for response body and headers
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
@@ -147,8 +156,13 @@ private:
 
     // Configure for POST if a body is provided
     if (postBody) {
+        const size_t body_length = postBody->length();
+        // **SAFETY**: Prevent narrowing conversion from size_t to long if body is too large.
+        if (body_length > static_cast<size_t>(std::numeric_limits<long>::max())) {
+            throw HttpException("POST body is too large to be handled by libcurl.");
+        }
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postBody->c_str());
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(postBody->length()));
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body_length));
     }
 
     // Perform the request
@@ -172,10 +186,10 @@ HttpClient::~HttpClient() = default;
 HttpClient::HttpClient(HttpClient&&) noexcept = default;
 HttpClient& HttpClient::operator=(HttpClient&&) noexcept = default;
 
-[[nodiscard]] HttpResponse HttpClient::get(const std::string& url, const std::map<std::string, std::string>& headers) const {
+[[nodiscard]] HttpResponse HttpClient::get(const std::string& url, const std::map<std::string, std::string, std::less<>>& headers) const {
     return pimpl->performRequest(url, std::nullopt, headers);
 }
 
-[[nodiscard]] HttpResponse HttpClient::post(const std::string& url, const std::string& body, const std::map<std::string, std::string>& headers) const {
+[[nodiscard]] HttpResponse HttpClient::post(const std::string& url, const std::string& body, const std::map<std::string, std::string, std::less<>>& headers) const {
     return pimpl->performRequest(url, body, headers);
 }
