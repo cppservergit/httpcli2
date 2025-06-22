@@ -1,0 +1,41 @@
+# A friendly name for your workflow, which will be shown on GitHub
+name: C++ libcurl wrapper CI
+
+# This section defines when the workflow should run.
+on:
+  # Run it on pushes to the 'main' branch
+  push:
+    branches: [ "main" ]
+  # Also run it on pull requests that target the 'main' branch
+  pull_request:
+    branches: [ "main" ]
+
+# This section defines the actual "jobs" (tasks) to be performed.
+jobs:
+  # We'll define a single job called 'build-and-test'
+  build-and-test:
+    # This job will run on the latest version of Ubuntu Linux
+    runs-on: ubuntu-latest
+
+    # These are the individual steps the job will execute in order
+    steps:
+    # Step 1: Check out your repository's code so the workflow can access it
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Step 2: Install the necessary dependencies for building C++ and libcurl
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y g++ libcurl4-openssl-dev
+
+    # Step 3: Build the test executable using your Makefile
+    # This calls the 'all' target in your Makefile.
+    - name: Build the project
+      run: make all
+
+    # Step 4: Run the compiled test program
+    # If the program returns a non-zero exit code (e.g., from a failed assert),
+    # the workflow will fail, correctly indicating a problem.
+    - name: Run tests
+      run: ./http_client_app
