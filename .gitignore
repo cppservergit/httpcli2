@@ -1,0 +1,6 @@
+# Compiled files
+*.o
+*.exe
+
+# Executable
+http_client_app
