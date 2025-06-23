@@ -1,8 +1,8 @@
 /**
  * @file main.cpp
  * @brief Test suite for the HttpClient class.
- * @author Martin Cordova
- * @date 2025-06-22
+ * @author Your Name
+ * @date 2025-06-23
  *
  * This file contains a series of tests to validate the functionality
  * of the HttpClient, including GET/POST requests, error handling,
@@ -11,10 +11,13 @@
 
 #include "http_client.hpp"
 #include <iostream>
-#include <thread>
+#include <thread> // For std::jthread
 #include <vector>
 #include <cassert>
 #include <functional> // For std::less
+#include <format>     // For std::format
+#include <fstream>    // For file I/O in tests
+#include <cstdio>     // For std::remove
 
 /**
  * @brief Prints the contents of an HttpResponse to the console.
@@ -22,13 +25,13 @@
  * @param response The HttpResponse object to print.
  */
 void print_response(const std::string& test_name, const HttpResponse& response) {
-    std::cout << "--- " << test_name << " ---\n";
-    std::cout << "Status Code: " << response.statusCode << "\n";
+    std::cout << std::format("--- {} ---\n", test_name);
+    std::cout << std::format("Status Code: {}\n", response.statusCode);
     std::cout << "Headers:\n";
     for (const auto& [key, value] : response.headers) {
-        std::cout << "  " << key << ": " << value << "\n";
+        std::cout << std::format("  {}: {}\n", key, value);
     }
-    std::cout << "Body:\n" << response.body << "\n\n";
+    std::cout << std::format("Body:\n{}\n\n", response.body);
 }
 
 /**
@@ -42,7 +45,7 @@ void test_simple_get() {
         assert(response.statusCode == 200);
         assert(!response.body.empty());
     } catch (const CurlException& e) {
-        std::cerr << "Test 'Simple GET' failed: " << e.what() << '\n';
+        std::cerr << std::format("Test 'Simple GET' failed: {}\n", e.what());
     }
 }
 
@@ -61,7 +64,7 @@ void test_get_with_headers() {
         assert(response.statusCode == 200);
         assert(response.body.find("Hello C++23") != std::string::npos);
     } catch (const CurlException& e) {
-        std::cerr << "Test 'GET with Headers' failed: " << e.what() << '\n';
+        std::cerr << std::format("Test 'GET with Headers' failed: {}\n", e.what());
     }
 }
 
@@ -78,13 +81,49 @@ void test_simple_post() {
         HttpResponse response = client.post("https://httpbin.org/post", post_body, headers);
         print_response("Simple POST", response);
         assert(response.statusCode == 200);
-        
         assert(response.body.find("\"name\": \"test\"") != std::string::npos);
         assert(response.body.find("\"value\": 42") != std::string::npos);
         assert(response.body.find("application/json") != std::string::npos);
     } catch (const CurlException& e) {
-        std::cerr << "Test 'Simple POST' failed: " << e.what() << '\n';
+        std::cerr << std::format("Test 'Simple POST' failed: {}\n", e.what());
     }
+}
+
+/**
+ * @brief Tests a multipart/form-data POST request with a field and a file.
+ */
+void test_multipart_post() {
+    const std::string temp_filename = "test_upload_file.txt";
+    const std::string file_content = "This is the content of the file to upload.";
+
+    // Create a dummy file for uploading
+    {
+        std::ofstream outfile(temp_filename);
+        outfile << file_content;
+    }
+
+    try {
+        HttpClient client;
+        std::vector<HttpFormPart> parts = {
+            {"field1", "value1"},
+            {"file1", HttpFormFile{temp_filename, "text/plain"}}
+        };
+        
+        HttpResponse response = client.post("https://httpbin.org/post", parts);
+        print_response("Multipart POST", response);
+        
+        assert(response.statusCode == 200);
+        // httpbin returns form fields in a 'form' object
+        assert(response.body.find("\"field1\": \"value1\"") != std::string::npos);
+        // httpbin returns file content in a 'files' object
+        assert(response.body.find(std::format("\"file1\": \"{}\"", file_content)) != std::string::npos);
+        
+    } catch (const CurlException& e) {
+        std::cerr << std::format("Test 'Multipart POST' failed: {}\n", e.what());
+    }
+
+    // Clean up the dummy file
+    std::remove(temp_filename.c_str());
 }
 
 /**
@@ -96,8 +135,8 @@ void test_connection_failure() {
         (void)client.get("http://192.0.2.1/test"); 
         std::cerr << "Test 'Connection Failure' failed: Expected an exception, but none was thrown.\n";
     } catch (const CurlException& e) {
-        std::cout << "--- Connection Failure ---\n";
-        std::cout << "Successfully caught expected exception: " << e.what() << "\n\n";
+        std::cout << std::format("--- Connection Failure ---\n");
+        std::cout << std::format("Successfully caught expected exception: {}\n\n", e.what());
     }
 }
 
@@ -112,8 +151,8 @@ void test_timeout() {
         (void)client.get("https://httpbin.org/delay/3");
         std::cerr << "Test 'Timeout' failed: Expected a timeout exception, but none was thrown.\n";
     } catch (const CurlException& e) {
-        std::cout << "--- Timeout ---\n";
-        std::cout << "Successfully caught expected timeout exception: " << e.what() << "\n\n";
+        std::cout << std::format("--- Timeout ---\n");
+        std::cout << std::format("Successfully caught expected timeout exception: {}\n\n", e.what());
     }
 }
 
@@ -126,8 +165,8 @@ void test_invalid_certificate() {
         (void)client.get("https://self-signed.badssl.com/");
         std::cerr << "Test 'Invalid Certificate' failed: Expected an exception, but none was thrown.\n";
     } catch (const CurlException& e) {
-        std::cout << "--- Invalid Certificate ---\n";
-        std::cout << "Successfully caught expected certificate validation exception: " << e.what() << "\n\n";
+        std::cout << std::format("--- Invalid Certificate ---\n");
+        std::cout << std::format("Successfully caught expected certificate validation exception: {}\n\n", e.what());
     }
 }
 
@@ -138,28 +177,26 @@ void test_thread_safety() {
     std::cout << "--- Thread Safety ---\n";
     
     const HttpClient client;
-    std::vector<std::thread> threads;
+    // Use std::jthread for automatic joining on destruction.
+    std::vector<std::jthread> threads;
     const int num_threads = 10;
 
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([&client, i]() {
             try {
-                auto response = client.get("https://httpbin.org/get?thread=" + std::to_string(i));
+                auto response = client.get(std::format("https://httpbin.org/get?thread={}", i));
                 if (response.statusCode == 200) {
-                    std::cout << "Thread " << i << " completed successfully.\n";
-                    assert(response.body.find("thread=" + std::to_string(i)) != std::string::npos);
+                    std::cout << std::format("Thread {} completed successfully.\n", i);
+                    assert(response.body.find(std::format("thread={}", i)) != std::string::npos);
                 } else {
-                    std::cerr << "Thread " << i << " failed with status code " << response.statusCode << ".\n";
+                    std::cerr << std::format("Thread {} failed with status code {}.\n", i, response.statusCode);
                 }
             } catch (const CurlException& e) {
-                std::cerr << "Thread " << i << " caught an exception: " << e.what() << '\n';
+                std::cerr << std::format("Thread {} caught an exception: {}\n", i, e.what());
             }
         });
     }
-
-    for (auto& t : threads) {
-        t.join();
-    }
+    
     std::cout << "Thread safety test completed.\n\n";
 }
 
@@ -171,6 +208,7 @@ int main() {
     test_simple_get();
     test_get_with_headers();
     test_simple_post();
+    test_multipart_post();
     test_connection_failure();
     test_timeout();
     test_invalid_certificate();
