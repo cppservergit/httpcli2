@@ -132,7 +132,7 @@ void test_multipart_post() {
 void test_connection_failure() {
     try {
         HttpClient client;
-        (void)client.get("http://192.0.2.1/test"); 
+        (void)client.get("https://192.0.2.1/test"); 
         std::cerr << "Test 'Connection Failure' failed: Expected an exception, but none was thrown.\n";
     } catch (const CurlException& e) {
         std::cout << std::format("--- Connection Failure ---\n");
