@@ -5,3 +5,6 @@
 
 # Executable
 http_client_app
+
+# Doxygen documentation
+docs/

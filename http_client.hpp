@@ -1,6 +1,13 @@
 #ifndef HTTP_CLIENT_HPP
 #define HTTP_CLIENT_HPP
 
+/**
+ * @file http_client.hpp
+ * @brief Defines the interface for a modern C++ HTTP client wrapper for libcurl.
+ * @author Martin Cordova
+ * @date 2025-06-22
+ */
+
 #include <string>
 #include <vector>
 #include <map>
@@ -10,9 +17,11 @@
 #include <functional> // For std::less
 
 /**
+ * @class CurlException
  * @brief Custom exception for libcurl-related errors.
  *
- * Thrown for network failures, timeouts, or other libcurl errors.
+ * This exception is thrown for network failures, timeouts, or other errors
+ * encountered during a libcurl operation. It inherits from std::runtime_error.
  */
 class CurlException : public std::runtime_error {
 public:
@@ -20,39 +29,55 @@ public:
 };
 
 /**
- * @brief Represents an HTTP response.
+ * @struct HttpResponse
+ * @brief Represents an HTTP response from a server.
+ *
+ * Contains the status code, response body, and headers returned by the server.
  */
 struct HttpResponse {
+    /// @brief The HTTP status code (e.g., 200 for OK, 404 for Not Found).
     long statusCode;
+    /// @brief The body of the HTTP response.
     std::string body;
-    // Use transparent comparator std::less<> for heterogeneous lookups.
+    /// @brief A map of response headers. Keys are header names, values are header values.
+    /// @note Uses std::less<> for transparent lookups.
     std::map<std::string, std::string, std::less<>> headers;
 };
 
 /**
- * @brief Configuration for the HttpClient.
+ * @struct HttpClientConfig
+ * @brief Configuration options for an HttpClient instance.
+ *
+ * Allows for setting timeouts and client-side SSL/TLS certificates.
  */
 struct HttpClientConfig {
-    /// Connection timeout in milliseconds. 0 for no timeout.
+    /// @brief Connection timeout in milliseconds. Defaults to 10000ms. Set to 0 for no timeout.
     long connectTimeoutMs = 10000L;
-    /// Total request/read timeout in milliseconds. 0 for no timeout.
+    /// @brief Total request/read timeout in milliseconds. Defaults to 30000ms. Set to 0 for no timeout.
     long requestTimeoutMs = 30000L;
-    /// Optional path to the client certificate file.
+    /// @brief Optional path to the client SSL certificate file (e.g., in PEM format).
     std::optional<std::string> clientCertPath;
-    /// Optional path to the client private key file.
+    /// @brief Optional path to the client SSL private key file.
     std::optional<std::string> clientKeyPath;
-    /// Optional password for the private key.
+    /// @brief Optional password for the client SSL private key.
     std::optional<std::string> clientKeyPassword;
 };
 
 /**
- * @brief A modern C++23 wrapper for libcurl for making REST API calls.
+ * @class HttpClient
+ * @brief A modern, thread-safe C++23 wrapper for libcurl for making REST API calls.
+ *
+ * This class provides a simple interface for making HTTP GET and POST requests.
+ * It is designed to be thread-safe by creating a new libcurl easy handle for each request.
+ * Global libcurl state is managed via an internal RAII object.
+ *
+ * @note This class is move-only to ensure clear ownership semantics.
  */
 class HttpClient {
 public:
     /**
-     * @brief Constructs an HttpClient with the given configuration.
-     * @param config Configuration options for timeouts and certificates.
+     * @brief Constructs an HttpClient with optional custom configuration.
+     * @param config A HttpClientConfig struct with desired settings.
      */
     explicit HttpClient(HttpClientConfig config = {});
 
@@ -71,26 +96,27 @@ public:
 
     /**
      * @brief Performs an HTTP GET request.
-     * @param url The URL to request.
-     * @param headers A map of request headers with a transparent comparator.
-     * @return The HTTP response.
-     * @throws CurlException on failure.
+     * @param url The target URL for the GET request.
+     * @param headers A map of request headers to be sent.
+     * @return An HttpResponse struct containing the server's response.
+     * @throws CurlException on network or libcurl-related failures.
      */
     [[nodiscard]] HttpResponse get(const std::string& url, const std::map<std::string, std::string, std::less<>>& headers = {}) const;
 
     /**
      * @brief Performs an HTTP POST request.
-     * @param url The URL to post to.
-     * @param body The request body.
-     * @param headers A map of request headers with a transparent comparator. A "Content-Type" header is recommended.
-     * @return The HTTP response.
-     * @throws CurlException on failure.
+     * @param url The target URL for the POST request.
+     * @param body The data to be sent in the request body.
+     * @param headers A map of request headers to be sent. A "Content-Type" header is recommended.
+     * @return An HttpResponse struct containing the server's response.
+     * @throws CurlException on network or libcurl-related failures.
      */
     [[nodiscard]] HttpResponse post(const std::string& url, const std::string& body, const std::map<std::string, std::string, std::less<>>& headers = {}) const;
 
 private:
-    // PImpl idiom to hide libcurl details from the header.
+    /// @brief Forward declaration for the private implementation (PImpl idiom).
     class Impl;
+    /// @brief A unique pointer to the private implementation.
     std::unique_ptr<Impl> pimpl;
 };
 

@@ -1,21 +1,39 @@
+/**
+ * @file main.cpp
+ * @brief Test suite for the HttpClient class.
+ * @author Martin Cordova
+ * @date 2025-06-22
+ *
+ * This file contains a series of tests to validate the functionality
+ * of the HttpClient, including GET/POST requests, error handling,
+ * and thread safety.
+ */
+
 #include "http_client.hpp"
 #include <iostream>
-#include <thread> // For std::jthread
+#include <thread>
 #include <vector>
 #include <cassert>
 #include <functional> // For std::less
-#include <format>     // For std::format
 
+/**
+ * @brief Prints the contents of an HttpResponse to the console.
+ * @param test_name The name of the test being run.
+ * @param response The HttpResponse object to print.
+ */
 void print_response(const std::string& test_name, const HttpResponse& response) {
-    std::cout << std::format("--- {} ---\n", test_name);
-    std::cout << std::format("Status Code: {}\n", response.statusCode);
+    std::cout << "--- " << test_name << " ---\n";
+    std::cout << "Status Code: " << response.statusCode << "\n";
     std::cout << "Headers:\n";
     for (const auto& [key, value] : response.headers) {
-        std::cout << std::format("  {}: {}\n", key, value);
+        std::cout << "  " << key << ": " << value << "\n";
     }
-    std::cout << std::format("Body:\n{}\n\n", response.body);
+    std::cout << "Body:\n" << response.body << "\n\n";
 }
 
+/**
+ * @brief Tests a simple HTTP GET request.
+ */
 void test_simple_get() {
     try {
         HttpClient client;
@@ -24,10 +42,13 @@ void test_simple_get() {
         assert(response.statusCode == 200);
         assert(!response.body.empty());
     } catch (const CurlException& e) {
-        std::cerr << std::format("Test 'Simple GET' failed: {}\n", e.what());
+        std::cerr << "Test 'Simple GET' failed: " << e.what() << '\n';
     }
 }
 
+/**
+ * @brief Tests an HTTP GET request with custom headers.
+ */
 void test_get_with_headers() {
     try {
         HttpClient client;
@@ -40,10 +61,13 @@ void test_get_with_headers() {
         assert(response.statusCode == 200);
         assert(response.body.find("Hello C++23") != std::string::npos);
     } catch (const CurlException& e) {
-        std::cerr << std::format("Test 'GET with Headers' failed: {}\n", e.what());
+        std::cerr << "Test 'GET with Headers' failed: " << e.what() << '\n';
     }
 }
 
+/**
+ * @brief Tests a simple HTTP POST request with a JSON body.
+ */
 void test_simple_post() {
     try {
         HttpClient client;
@@ -59,21 +83,27 @@ void test_simple_post() {
         assert(response.body.find("\"value\": 42") != std::string::npos);
         assert(response.body.find("application/json") != std::string::npos);
     } catch (const CurlException& e) {
-        std::cerr << std::format("Test 'Simple POST' failed: {}\n", e.what());
+        std::cerr << "Test 'Simple POST' failed: " << e.what() << '\n';
     }
 }
 
+/**
+ * @brief Tests connection failure to a non-routable address.
+ */
 void test_connection_failure() {
     try {
         HttpClient client;
-        (void)client.get("https://192.0.2.1/test"); 
+        (void)client.get("http://192.0.2.1/test"); 
         std::cerr << "Test 'Connection Failure' failed: Expected an exception, but none was thrown.\n";
     } catch (const CurlException& e) {
-        std::cout << std::format("--- Connection Failure ---\n");
-        std::cout << std::format("Successfully caught expected exception: {}\n\n", e.what());
+        std::cout << "--- Connection Failure ---\n";
+        std::cout << "Successfully caught expected exception: " << e.what() << "\n\n";
     }
 }
 
+/**
+ * @brief Tests the request timeout functionality.
+ */
 void test_timeout() {
     try {
         HttpClientConfig config;
@@ -82,52 +112,61 @@ void test_timeout() {
         (void)client.get("https://httpbin.org/delay/3");
         std::cerr << "Test 'Timeout' failed: Expected a timeout exception, but none was thrown.\n";
     } catch (const CurlException& e) {
-        std::cout << std::format("--- Timeout ---\n");
-        std::cout << std::format("Successfully caught expected timeout exception: {}\n\n", e.what());
+        std::cout << "--- Timeout ---\n";
+        std::cout << "Successfully caught expected timeout exception: " << e.what() << "\n\n";
     }
 }
 
+/**
+ * @brief Tests failure when connecting to a server with an invalid SSL certificate.
+ */
 void test_invalid_certificate() {
     try {
         HttpClient client;
         (void)client.get("https://self-signed.badssl.com/");
         std::cerr << "Test 'Invalid Certificate' failed: Expected an exception, but none was thrown.\n";
     } catch (const CurlException& e) {
-        std::cout << std::format("--- Invalid Certificate ---\n");
-        std::cout << std::format("Successfully caught expected certificate validation exception: {}\n\n", e.what());
+        std::cout << "--- Invalid Certificate ---\n";
+        std::cout << "Successfully caught expected certificate validation exception: " << e.what() << "\n\n";
     }
 }
 
+/**
+ * @brief Tests the thread safety of the HttpClient class by making concurrent requests.
+ */
 void test_thread_safety() {
     std::cout << "--- Thread Safety ---\n";
     
     const HttpClient client;
-    // Use std::jthread for automatic joining on destruction.
-    std::vector<std::jthread> threads;
+    std::vector<std::thread> threads;
     const int num_threads = 10;
 
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([&client, i]() {
             try {
-                auto response = client.get(std::format("https://httpbin.org/get?thread={}", i));
+                auto response = client.get("https://httpbin.org/get?thread=" + std::to_string(i));
                 if (response.statusCode == 200) {
-                    std::cout << std::format("Thread {} completed successfully.\n", i);
-                    assert(response.body.find(std::format("thread={}", i)) != std::string::npos);
+                    std::cout << "Thread " << i << " completed successfully.\n";
+                    assert(response.body.find("thread=" + std::to_string(i)) != std::string::npos);
                 } else {
-                    std::cerr << std::format("Thread {} failed with status code {}.\n", i, response.statusCode);
+                    std::cerr << "Thread " << i << " failed with status code " << response.statusCode << ".\n";
                 }
             } catch (const CurlException& e) {
-                std::cerr << std::format("Thread {} caught an exception: {}\n", i, e.what());
+                std::cerr << "Thread " << i << " caught an exception: " << e.what() << '\n';
             }
         });
     }
 
-    // No explicit join loop is needed. The std::jthread destructors
-    // will be called when 'threads' goes out of scope, automatically joining them.
-    
+    for (auto& t : threads) {
+        t.join();
+    }
     std::cout << "Thread safety test completed.\n\n";
 }
 
+/**
+ * @brief Main entry point for the test application.
+ * @return 0 on successful execution.
+ */
 int main() {
     test_simple_get();
     test_get_with_headers();
